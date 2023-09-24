@@ -1,0 +1,333 @@
+---
+title: "STAT 435 HW 2"
+author: "Pat McCornack"
+date: "2022-10-14"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Chapter 3: Question 14 of ISLR Book:
+
+## a) What is the form of the linear model y?
+The linear model y is of the form $y = \beta_1 x_1 + \beta_2 x_2 + \epsilon$ where $\beta_1 = 2$ and $\beta_2 = 0.3$ and the intercept is equal to 2. 
+
+```{r}
+library(MASS)
+set.seed(1)
+x1 <- runif(100)
+x2 <- 0.5 * x1 + rnorm(100) / 10
+y <- 2 + 2 * x1 + 0.3 * x2 + rnorm(100)
+```
+
+## b) What is the correlation between x1 and x2?
+The correlation coefficient between x2 and x2 is $r = 0.835$. This is strong positive corre
+
+```{r}
+cor(x1, x2)
+plot(x1,x2)
+```
+
+## c) Describe results of least squares regression. 
+The correlation coefficients for the linear model using x1 and x2 for least squares regression are:
+$\hat\beta_0 = 2.13, \hat\beta_1 = 1.44, \hat\beta_2 = 1.01$. The intercept is close, but both $\hat\beta_1 and \hat\beta_2$ are significantly different than the true coefficients of $\beta_1 = 2 and \beta_2 = 0.3$. 
+
+Since the p-value of $\hat\beta_1$ = .049 we can reject the null hypothesis $H_0 : \beta_1 = 0$ at a significance level $\alpha$ = 0.05. We cannot reject the null hypothesis $\beta_2 = 0$ however. 
+
+```{r}
+lm.model <- lm(y ~ x1 + x2)
+summary(lm.model)
+plot(lm.model)
+```
+
+## d) Predict y using only x1
+This model has a coefficient of $\hat\beta_1 = 1.98$ which is very close to the true value of 2. With a p-value of close to 0, we can reject the null hypothesis $\beta_1 = 0$. 
+
+```{r}
+x1_model <- lm(y ~ x1)
+summary(x1_model)
+```
+
+## e) Predict y using only x2
+The coefficient $\hat\beta_2$ for this model is even further from the true value than the multivariate model at a value of 2.9 vs. the true value of 0.3, but the p-value __can__ be used to reject the null hypothesis $\beta_2 = 0$ at a value of close to 0.
+
+
+```{r}
+x2_model <- lm(y ~ x2)
+summary(x2_model)
+```
+## f) Do these results contradict each other.
+__For x1__: The coefficient $\hat\beta_1$ from (d) is closer to the true value than that from (c), but the results aren't necessarily contradictory.
+
+__For x2__: The results for coefficient $\hat\beta_2$ from (c) and (e) are contradictory. In (c) the result for $\hat\beta_2$ did not allow us to reject the null hypothesis as it was distant from the true value of $\beta_2$. The result for $\hat\beta_2$ from (e) did allow us to reject the null hypothesis despite being more distant from the true value. 
+
+
+## g) Refit the model with an additional (mismeasured) observation
+
+
+For the multivariate model the new observation made the coefficient less close to the true values and flipped the significance of the variables using the p-values. This model has that the null hypothesis can be rejected using the second coefficient but not the first. 
+
+In this model the observation is neither an outlier (defined as having a studentized residual > abs(3)) nor a high leverage point (based on Cook's Distance).
+```{r}
+x1 <- c(x1, 0.1)
+x2 <- c(x2, 0.8)
+y <- c(y, 6)
+
+lm.model <- lm(y ~ x1 + x2)
+summary(lm.model)
+plot(lm.model)
+
+# Check for outliers
+studentized_resi = studres(lm.model)
+plot(studentized_resi)
+
+# Check for leverage points
+cd = cooks.distance(lm.model)
+leverage_indices = which(cd > 4/nrow(lm.model))
+leverage_indices
+
+```
+
+
+In the model using only x1 the new observation made the coefficient more distant from the true value and raised the p-value, although the p-value is still significant enough to reject the null hypothesis. 
+
+The new observation is neither an outlier nor a high leverage point in this model either based on studentized residuals and cooks distance. 
+```{r}
+x1_model <- lm(y ~ x1)
+summary(x1_model)
+plot(x1_model)
+
+# Check for outliers
+studentized_resi = studres(x1_model)
+plot(studentized_resi)
+
+outliers = which(studentized_resi > abs(3))
+outliers
+
+# Check for leverage points
+cd = cooks.distance(x1_model)
+leverage_indices = which(cd > 4/nrow(x1_model))
+leverage_indices
+```
+
+
+The results for the model based on only x2 are the same. The coefficient was shifted further from its true value and the new observation is not an outlier or high leverage point based on studentized residuals and cooks distance. 
+```{r}
+x2_model <- lm(y ~ x2)
+summary(x2_model)
+plot(x2_model)
+
+# Check for outliers
+studentized_resi = studres(lm.model)
+plot(studentized_resi)
+
+# Check for leverage points
+cd = cooks.distance(lm.model)
+leverage_indices = which(cd > 4/nrow(lm.model))
+leverage_indices
+
+```
+
+# Q2 
+```{r}
+set.seed(1)
+```
+
+## a)
+
+Simulate the training data set.
+```{r}
+n = 25
+
+x <- rnorm(n,0,1)
+eps <- rnorm(n,0,1)
+y = exp(x) + eps
+```
+
+## b) 
+
+Fit four regression models
+```{r}
+p = 4
+
+y1 <- lm(y ~ x)
+y2 <- lm(y ~ x + x^2)
+y3 <- lm(y ~ x + x^2 + x^3)
+y4 <- lm(y ~ x + x^2 + x^3 + x^4)
+```
+
+
+## c)
+
+Create a training dataset with 500 observations
+```{r}
+n = 500
+x.test <- rnorm(n,0,1)
+eps.test <- rnorm(n,0,1)
+y.test <- exp(x.test) + eps.test
+```
+
+
+## d)
+
+Compute the test error for each of the four models.
+```{r}
+MSE = c()
+
+fitted.values <- coef(y1)[1] + x.test * coef(y1)[2]
+MSE[1] <- mean((y.test - fitted.values)^2)
+
+fitted.values <- coef(y2)[1] + x.test * coef(y2)[2]
+MSE[2] <- mean((y.test - fitted.values)^2)
+
+fitted.values <- coef(y3)[1] + x.test * coef(y3)[2]
+MSE[3] <- mean((y.test - fitted.values)^2)
+
+fitted.values <- coef(y4)[1] + x.test * coef(y4)[2]
+MSE[4] <- mean((y.test - fitted.values)^2)
+```
+
+## e)
+
+Which model is the 'best fit' model?
+
+The model with the lowest MSE value and therefore best fit is the first model y ~ x. It's surprising to me that the linear model is the best fit as I would have expected the polynomial function x + x^2 + x^3 to be the best fit. 
+
+```{r}
+which.min(MSE)
+```
+
+
+# Q3
+
+Using the Hitters dataset from the ISLR package:
+```{r}
+library(ISLR)
+library(glmnet)
+library(dplyr)
+library(tidyverse)
+data("Hitters")
+attach(Hitters)
+```
+
+
+## a.
+
+Split the data into training/testing sets
+```{r}
+df <- data.frame(filter(Hitters, !is.na(Hitters$Salary))) # Remove NAs
+df <- df[,-c(14,15,20)]  # remove factor variables for regression
+
+train_n <- ceiling(nrow(df) * 3/4)
+test_n <- nrow(df) - train_n
+
+data.train <- df[1:train_n,]
+data.test <- df[train_n+1:nrow(df),]
+
+```
+
+## b.
+
+Fit the model using least squares regression and report the test error.
+
+The mean test error of the linear model is -45.84.
+
+```{r}
+lm.model <- lm(data.train$Salary ~ ., data = data.train)
+lm.fitted <- as.matrix(cbind(1, data.test[-17])) %*% coef(lm.model)
+test_error <- data.test$Salary - lm.fitted
+mean(test_error, na.rm = TRUE)
+test_error
+
+
+```
+
+
+## c.
+
+Fit a ridge regression model on the training set, with $\lambda$ chosen by cross-validation. Report test error obtained.  
+
+The best lambda value ends up being .001 selected using cross validation. The mean test error of the ridge regression model is -46.2 and the vector of test errors are as follows:
+```{r}
+
+# Cross-validation for lambda
+
+lam <- seq(0.001, 2, length.out = 100)
+k = 5 
+ncv = ceiling(nrow(data.train)/k)
+cv.ind = rep(1:k, ncv)
+cv.ind.rand = sample(cv.ind, nrow(data.train), replace = F)
+
+cv.error <- c(); MSE.cv <- c()
+for(i in 1:100){
+    for(j in 1:k){
+      l.train <- data.train[cv.ind.rand != j, ]
+      y.train <- data.train$Salary
+      ridge.model <- glmnet(data.train[-17], y.train, lambda = lam[i], alpha = 0)
+      
+      l.test <- data.train[cv.ind.rand == j, ]
+      l.test.values <- l.test$Salary
+      test.response <- as.matrix(cbind(1, l.test[-17])) %*% coef(ridge.model, s = lam[i])
+      MSE.cv[j] = mean((l.test.values - test.response)^2)
+    }
+  cv.error[i] = mean(MSE.cv)
+}
+lam_index = which.min(cv.error)  
+
+ridge.model <- glmnet(data.train[-17], data.train$Salary, lambda = lam[lam_index], alpha = 0)
+
+ridge.fitted <- as.matrix(cbind(1, data.test[-17])) %*% coef(ridge.model, s = lam[lam_index]) 
+test_error <- data.test$Salary - as.numeric(ridge.fitted)
+mean(test_error, na.rm = TRUE)
+test_error
+
+```
+## d.
+
+Fit the lasso model and report the test erro along with the number of non-zero coefficients. 
+
+The mean error for the lasso regression model is -46.19. However, I believe there's a mistake in the cross-validation code for lambda as the lasso error should not be the same as the ridge error. I cannot figure out where the error is. All variables are non-zero with the chosen lambda, which is likely not to be the case.
+
+
+```{r}
+
+# Cross-validation for lambda
+
+lam <- seq(0.001, 2, length.out = 100)
+k = 5 
+ncv = ceiling(nrow(data.train)/k)
+cv.ind = rep(1:k, ncv)
+cv.ind.rand = sample(cv.ind, nrow(data.train), replace = F)
+
+cv.error <- c(); MSE.cv <- c()
+for(i in 1:100){
+    for(j in 1:k){
+      l.train <- data.train[cv.ind.rand != j, ]
+      y.train <- data.train$Salary
+      lasso.model <- glmnet(data.train[-17], y.train, lambda = lam[i], alpha = 1)
+      
+      l.test <- data.train[cv.ind.rand == j, ]
+      l.test.values <- l.test$Salary
+      test.response <- as.matrix(cbind(1, l.test[-17])) %*% coef(lasso.model, s = lam[i])
+      MSE.cv[j] = mean((l.test.values - test.response)^2)
+    }
+  cv.error[i] = mean(MSE.cv)
+}
+lam_index = which.min(cv.error)  # which value of lambda
+
+lasso.model <- glmnet(data.train[-17], data.train$Salary, lambda = lam[lam_index], alpha = 1)
+
+lasso.fitted <- as.matrix(cbind(1, data.test[-17])) %*% coef(lasso.model, s = lam[lam_index]) 
+test_error <- data.test$Salary - as.numeric(lasso.fitted)
+mean(test_error, na.rm = TRUE)
+test_error
+coef(lasso.model, s = lam[lam_index])
+```
+
+## e
+
+Comment on the obtained results.
+
+The test error, with a mean of approximately -46, is fairly low given the scale of the numbers we're working with. The can pretty accurately predict salary using the various observations. The difference in test error between the linear and lasso/ridge regression was marginal.

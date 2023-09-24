@@ -1,0 +1,127 @@
+---
+title: "STAT 435 Quiz 2"
+author: "Pat McCornack"
+date: "2022-10-10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Q1
+
+## a
+
+Simulate the data set. There are 300 observations and 200 variables. 
+```{r}
+set.seed(1)
+n = 300; p=200; s=5
+x = matrix(rnorm(n * p), n, p)
+b = c(rep(1, s),rep(0, p-s))
+y = 1 + x %*% b + rnorm(n)
+```
+
+## b
+
+Create a vector of potential lambda variables. 
+```{r}
+L <- seq(0,2,length.out=100)
+```
+
+## c
+
+Create a lasso model for the data using the 10th element of the lambda vector L. 
+```{r}
+library(glmnet)
+lasso.model <- glmnet(x, y, lambda = L, alpha = 1)
+coef(lasso.model, s = L[10])
+```
+
+
+## d
+
+Compute the mean squared error (MSE) value for each model. The plot shows a monitonic increase in MSE with L until a plateau in MSE at around lambda = 1.2. This suggests a lower lambda value will minimize the MSE. 
+```{r}
+MSE = c()
+for(i in 1:100){
+  y.hat <- as.matrix(cbind(1, x)) %*% coef(lasso.model, s = L[i])
+  MSE[i] <- mean((y - y.hat )^2)
+}
+
+plot(L, MSE)
+```
+
+
+## e 
+
+The following computes the cross validation error for each value of lambda. 
+```{r}
+k = 5
+ncv = ceiling(n/k)  # Observations per fold
+cv.ind = rep(1:k, ncv)  # Fold index
+cv.ind.random = sample(cv.ind, n, replace = F)  # Randomize fold index
+data = data.frame(y = y, x = x)
+
+
+cv.error = c(); MSE.cv = c()
+for(i in 1:100){  # Loop through values of lambda
+  for(j in 1:k){  # Loop through folds
+      train <- data[cv.ind.random != j, ]
+      train.y <- train$y
+      lasso.model <- glmnet(train[-1], train.y, lambda = L[i], alpha = 1)
+      
+      test = data[cv.ind.random == j,]
+      test.values = test$y
+      test.response <- as.matrix(cbind(1, test[-1])) %*% coef(lasso.model, s = L[i])
+      MSE.cv[j] = mean((test.values - test.response)^2)
+    }
+  cv.error[i] = mean(MSE.cv)
+}
+
+which.min(cv.error)
+L[which.min(cv.error)]
+```
+
+## f
+
+```{r}
+lasso.funct <- function(x, y, k, L)
+{
+  ncv = ceiling(dim(x)[1]/k)
+  cv.ind = rep(1:k, ncv)
+  cv.ind.random = sample(cv.ind, dim(x)[1], replace = F)
+  data = data.frame(y = y, x = x)
+  
+  cv.error = c(); MSE.cv = c()
+  for(i in 1:length(L)){
+    for(j in 1:k){
+      train <- data[cv.ind.random != j, ]
+      train.y <- train$y
+      lasso.model <- glmnet(train[-1], train.y, lambda = L[i], alpha = 1)
+      
+      test = data[cv.ind.random == j,]
+      test.values = test$y
+      test.response <- as.matrix(cbind(1, test[-1])) %*% coef(lasso.model, s = L[i])
+      MSE.cv[j] = mean((test.values - test.response)^2)
+    }
+  cv.error[i] = mean(MSE.cv)
+  }
+  
+  results <- list(coef(lasso.model, s = L[which.min(cv.error)]), cv.error, L, L[which.min(cv.error)])
+  
+  return(results)
+}
+
+```
+
+
+## g
+
+```{r}
+output = lasso.funct(x, y, 5, L)
+
+plot(output[[3]], output[[2]], xlab = 'L', ylab = 'CV Error' )
+```
+
+

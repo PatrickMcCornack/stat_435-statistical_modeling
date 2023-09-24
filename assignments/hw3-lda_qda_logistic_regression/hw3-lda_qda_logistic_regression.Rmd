@@ -1,0 +1,261 @@
+---
+title: "STAT 435 HW 3"
+author: "Pat McCornack"
+date: "2022-11-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Q1 - Question 1 of Chapter 4 of textbook
+
+$p(x) = \frac{e^{\beta_0 + \beta_1x}}{1 + e^{\beta_0 + \beta_1x}}$
+
+$1 - p(x) = 1 - \frac{e^{\beta_0 + \beta_1x}}{1 + e^{\beta_0 + \beta_1x}}$
+
+$= \frac{1 + e^{\beta_0 + \beta_1x} - e^{\beta_0 + \beta_1x}}{1 + e^{\beta_0 + \beta_1x}}$
+          
+$=\frac{1}{1 + e^{\beta_0 + \beta_1x}}$
+          
+$\frac{p(x)}{1-p(x)} = \frac{e^{\beta_0 + \beta_1x}}{1 + e^{\beta_0 + \beta_1x}} * \frac{1 + e^{\beta_0 + \beta_1x}}{1}$
+
+$\frac{p(x)}{1-p(x)} = e^{\beta_0 + \beta_1x}$
+
+# Q2 - Question 2 of Chapter 4 of textbook
+
+# Q3 - Question 5 of Chapter 4 of textbook
+
+## a. 
+
+We would expect LDA to perform better on both the training set and test set if the Bayes decision boundary is linear.
+
+
+## b. 
+
+For a non-linear Bayes decision boundary we would expect QDA to perform better on the training and test sets
+
+## c. 
+
+We would expect the predication accuracy of QDA relative to LDA to remain unchanged as the sample size n increases because the suitability of QDA over LDA is dependent on the nature of the decision boundary and not the sample size.
+
+## d. 
+
+False. While we could achieve a superior error rate using QDA on the training data because of its flexibility this wouldn't necessarily translate to a better error rate on the test set. The higher flexibility makes it more likely that QDA would pick up on anomalies in the training set and lead to over-fitting. 
+
+# Q4 - Question 6 of Chapter 4 of textbook
+
+
+## a.
+
+The probability that a student that studied 40 hours and had a GPA of 3.5 receives an A in the class is __37.75%__.
+
+```{r}
+B0 <- -6
+B1 <- 0.05
+B2 <- 1
+hours <- 40  
+GPA <- 3.5
+
+prob.A <- (exp(B0 + B1*hours + B2*GPA)) / (1 + exp(B0 + B1*hours + B2*GPA))
+prob.A
+```
+
+## b.
+
+The same student would need to study 50 hours to have a 50% probability of getting an A in the class.
+
+```{r}
+(log((.5/(1-.5))) - (B0 + B2*GPA)) / .05
+```
+
+# Q5 - Question 7 of Chapter 4 of textbook
+
+There is a __75.2%__ chance that the company issues a dividend.
+
+```{r}
+# x is last year's % profit
+div_mean <- 10
+no_div_mean <- 0
+var <- 36
+x <- 4
+
+# 80% of companies issued dividends
+
+# Density }
+
+f1_density <- 1/(sqrt(2*pi*var))*exp((-(x-div_mean)^2)/(2*var))
+
+f2_density <- 1/(sqrt(2*pi*var))*exp((-(x-no_div_mean)^2)/(2*var))
+
+prob <- (.8 * f1_density)/(.8 * f1_density + .2 * f2_density)
+prob
+```
+
+# Q6 - Question 10 of Chapter 4 (All parts but (g))
+
+
+# Q7 - Question 13 of Chapter 4 (Use LDA, QDA, logistic regression, regularized logistic regression)
+
+
+```{r}
+library(ISLR)
+library(ggplot2)
+library(GGally)
+library(glmnet)
+library(tidyverse)
+data(Weekly)
+names(Weekly)
+```
+
+## a. 
+
+First I look at the summary statistics and scatterplot matrix for the data. No patterns become immediately apparent through the summary statistics, but it's worth noting that there are more weeks with positive returns than negative. 
+
+When looking at the scatterplot matrix most pairs of variables yield uncorrelated clouds and have matching very low correlation coefficients. The only notable exception is the Year vs. Volume data where we see an upward trend. This plot is blown up for further inspection below. I also plotted the Volume histogram because of its skewed distribution.
+
+```{r}
+summary(Weekly)
+ggpairs(Weekly)
+```
+Notable points about the Year vs. Volume scatterplot are the overall upward trend and the increase in spread over time. We can also see that the drop in volume after 2008 corresponds to the recession at that time.
+
+The volume histogram shows a right-tailed distribution. This makes sense since very high volume weeks would be an exception with lower volume weeks being more typical. 
+
+```{r}
+ggplot(data = Weekly, aes(x=Year, y=Volume)) +
+  geom_point()
+
+ggplot(data = Weekly, aes(x=Volume)) +
+  geom_histogram()
+```
+## b. 
+
+According to the model the p-value of Lag2 is less than .05 which indicates it may be statistically significant. 
+
+```{r}
+log.mod <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, family = 'binomial', data = Weekly)
+
+summary(log.mod)
+```
+
+## c. 
+
+The model correctly predicts 56% of the observations. This is only marginally better than a random classifier. It makes more false-positive predictions where it predicts the direction will be up when the true value is down than false-negative predictions. 
+
+```{r}
+probs <- predict(log.mod, Weekly, type = "response")
+n <- dim(Weekly)[1]
+pred <- rep("Down", n)
+pred[probs > 0.5] <- "Up"
+
+table(pred, Weekly$Direction)
+
+correct <- (557 + 54) / (557 + 54 + 48 + 430)
+correct
+```
+
+## d. 
+
+The logistic model correctly predicted 62.5% of observations from the test dataset. 
+
+```{r}
+train <- filter(Weekly, Year <= 2008)
+test <- filter(Weekly, Year > 2008)
+
+lag2.log.mod <- glm(Direction ~ Lag2, data = Weekly, family = 'binomial')
+prob <- predict(lag2.log.mod, test, type = 'response')
+n <- dim(test)[1]
+pred <- rep("Down", n)
+pred[prob > 0.5] <- "Up"
+
+table(pred, test$Direction)
+correct <- (9 + 56) / (9 + 5 + 34 + 56)
+correct
+```
+
+## e.
+
+The prediction accuracy using the test dataset and LDA is 62.5%. 
+
+```{r}
+library(MASS)
+
+# Prediction using Linear Discriminant Analysis
+lda.mod <- lda(Direction ~ Lag2, data = train)
+lda.pred <- predict(lda.mod, test)
+
+table(lda.pred$class, test$Direction)
+(9 + 56) / (9 + 5 + 34 + 56)
+
+```
+
+
+## f.
+
+The QDA model predicted 58.7% of observations correctly.
+
+```{r}
+qda.mod <- qda(Direction ~ Lag2, data = train)
+qda.pred <- predict(qda.mod, test)
+
+table(qda.pred$class, test$Direction)
+61 / (43 + 61)
+```
+
+## g. 
+
+knn prediction accuracy of the test dataset is 50%. 
+
+```{r}
+library(class)
+
+train.predictors <- dplyr::select(train, Lag2)
+train.response <- dplyr::select(train, Direction)
+
+test.predictors <- dplyr::select(test, Lag2)
+test.response <- dplyr::select(test, Direction)
+
+knn.pred <- knn(train.predictors, test.predictors, train.response[,1], k=1)
+
+
+table(knn.pred, test.response[,1])
+(21 + 31)/(21 + 30 + 22 + 31)
+```
+
+
+# Q8
+
+Read in data from csv
+```{r}
+dat <- read.csv("./Hw3data.csv")
+```
+
+
+## Implement LDA and QDA using data
+
+```{r}
+lda.fit <- lda(response ~ ., data = dat)
+lda.pred <- predict(lda.fit, dat)
+table(lda.pred$class, dat$response)
+
+
+qda.fit <- qda(response ~ ., data = dat)
+qda.pred <- predict(qda.fit, dat)
+table(qda.pred$class, dat$response)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,304 @@
+---
+title: "STAT 435 HW 4"
+author: "Pat McCornack"
+date: "2022-11-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Question 1 - (ISLR Ch. 7 - Q7)
+
+## Initial EDA 
+
+First I did some initial exploration variance of variables as well as covariance among variables using visualization and summarization. One thing to note is that the demographics of the data are highly skewed towards men that are married and white. 
+
+A couple of trends of note among variables is that age and marital status are strongly correlated as are job class and education. This is of note because there appears to be a trend between job class and wage where information jobs tend to pay higher on average than industrial jobs.
+
+```{r}
+library(ISLR)
+library(ggplot2)
+attach(Wage)
+data(Wage)
+summary(Wage)
+set.seed(1234)
+
+# Exploration of variance within variables 
+
+ggplot(data = Wage) +
+  geom_histogram(aes(x=wage))
+
+ggplot(data = Wage, aes(x = maritl)) +
+  geom_bar()
+
+ggplot(data = Wage, aes(x = age)) +
+  geom_histogram()
+
+ggplot(data = Wage, aes(x = maritl)) +
+  geom_bar()
+
+
+# Exploration of covariance
+ggplot(data = Wage, aes(x = maritl, y = age)) +
+  geom_boxplot()
+
+ggplot(data = Wage) +
+  geom_boxplot(aes(x=education, y=wage))
+
+ggplot(data = Wage) +
+  geom_count(aes(x=education, y=jobclass))
+
+ggplot(data = Wage, aes(x=jobclass, y=wage)) +
+  geom_boxplot()
+
+ggplot(data = Wage, aes(x = education, y = age)) +
+  geom_boxplot()
+
+ggplot(data = Wage) +
+  geom_count(aes(x = maritl, y = jobclass))
+
+```
+
+## Modeling
+
+There doesn't appear to be any colinearity between marital status and job class, so we will use these variables as predictors for wage. We use a generalized additive model to fit these qualitative predictors for the wage data. The result is a model that predicts wage based on marital status and job class. The model was then used to make predictions using the wage dataset. These predictions confirm our early hypothesis that information workers tend to make more than industrial workers and also show that married individuals make more than the other marital statuses across both categories. However, it's important to note that this may be because married individuals are typically in the age bracket where they have the highest earning potential. The boxplot shows that individuals that have never married tend to be much younger, and we know from earlier analyses that younger people tend to earn less. The same is true of the population of retirement age which the average of the widowed group tends toward. Additionally, much less data is available for the widowed/divorced/separated categories.
+
+I also created another generalized additive model to predict wage using age and job class with similar conclusions to be drawn as the above and prior analyses. 
+
+```{r}
+library(gam)
+
+fit <- gam(wage ~ maritl + jobclass, data = Wage)
+pred <- predict(fit, newdata = Wage$jobclass)
+
+ggplot(data = Wage) +
+  geom_point(aes(x = maritl, y = pred, color=jobclass))
+
+MSE <- sum((Wage$wage - pred)^2) / nrow(Wage)
+MSE
+
+ggplot(data = Wage, aes(x = maritl, y = age)) +
+  geom_boxplot()
+
+# Including age and jobclass
+fit <- gam(wage ~ poly(age, 3) + jobclass, data = Wage)
+pred <- predict(fit, newdata = Wage$jobclass)
+
+ggplot(data = Wage) +
+  geom_point(aes(x = age, y = pred, color=jobclass))
+
+MSE <- sum((Wage$wage - pred)^2) / nrow(Wage)
+MSE
+
+
+
+```
+
+
+# Question 2 - (ISLR Ch 7. Q8)
+
+After using ggpairs() to get an overview of the data, we recognize that there are few relationships that appear to be non-linear. In particular we first predict mpg using the horsepower and number of cylinders as well as the weight and number of cylinders. We fit polynomial models of the third degree to both of these relationships. Both relationships show that there is indeed a non-linear fit to the data and that the mpg value drops off as both weight and the number of cylinders increases.
+
+We also create a model to predict acceleration from a combination of weight and number of cylinders. This is a much more interesting plot because the plot shows the interaction between the predictor terms. We would expect a lighter vehicle with more cylinders to have a higher acceleration but for 4 and 6 cylinders we see that the vehicles with the highest acceleration in each bracket are actually the heaviest ones while for 8 cylinders the curve is convex with the highest acceleration in the middle of the bracket. These effects would not be captured by a linear model. 
+
+```{r}
+attach(Auto)
+library(GGally)
+data(Auto)
+summary(Auto)
+(ggp <- ggpairs(Auto[ ,-9]))
+
+# Poly models
+
+## Predict mpg from horsepower and number of cylinders
+poly.fit <- lm(mpg ~ poly(horsepower,3) + cylinders)
+pred <- predict(poly.fit, newdata = Auto)
+
+ggplot(data = Auto, aes(x = horsepower, y = pred, color = cylinders)) +
+  geom_point() +
+  ylab("Predicted mpg")
+
+## predict mpg from weight and number of cylinders
+poly.fit <- lm(mpg ~ poly(weight,3) + cylinders)
+pred <- predict(poly.fit, newdata = Auto)
+
+ggplot(data = Auto, aes(x = weight, y = pred, color = cylinders)) +
+  geom_point() +
+  ylab("Predicted mpg")
+
+## predict acceleration from weight and number of cylinders
+poly.fit <- lm(acceleration ~ poly(weight, 3) + cylinders)
+pred <- predict(poly.fit, newdata = Auto)
+
+ggplot(data = Auto, aes(x = weight, y = pred, color = cylinders)) +
+  geom_point() +
+  ylab("Predicted Acceleration")
+
+summary(poly.fit)
+
+
+
+
+
+```
+
+
+# Question 3 - (ISLR Ch.7 Q9)
+
+```{r}
+library(MASS)
+attach(Boston)
+data(Boston)
+```
+
+## a - Using poly() to predict nox with dis0
+
+```{r}
+poly.fit <- lm(nox ~ poly(dis, 3))
+summary(poly.fit)
+poly.pred <- predict(poly.fit, newdata = Boston)
+ggplot(data = Boston) +
+  geom_jitter(aes(x=dis, y = nox), size = 1) +
+  geom_smooth(aes(x = dis, y = poly.pred, color = "prediction"), se = F) +
+  labs(title = "Nitrogen Oxide Concentration vs. Distance from Boston Employment Centers",
+       x = "Distance",
+       y = "Nitrogen Oxide Concentration")
+
+```
+
+## b. Polynomial fits for a range of degrees
+
+```{r}
+
+RSS.list <- c(rep(0,10))
+for(i in 1:10) {
+  poly.fit <- lm(nox ~ poly(dis, i))
+  pred <- predict(poly.fit, newdata = Boston)
+  RSS <- sum((Boston$nox - pred)^2)
+  RSS.list[i] <- RSS
+}
+
+RSS.list
+
+```
+
+## c. Cross validation to select degree
+
+The following uses cross validation to determine the optimal degree polynomial to be used to fit the data. The mean squared error is used as the deciding metric. This approach was used to find that a first degree polynomial is the best fit for this data.
+
+```{r}
+k <- 5  # Number of folds
+ncv <- ceiling(nrow(Boston) / k)  # Number observations per fold
+cv.ind <- rep(1:k, ncv)
+cv.ind.rand <- sample(cv.ind, nrow(Boston), replace = F)
+
+# Vectors to track error
+cv.error <- c()
+MSE.cv <- c()
+
+for(i in 1:10) {
+  for(j in 1:k){  # For each fold
+    dis.train <- Boston[cv.ind.rand != j, 'dis']  # Training predictor
+    nox.train <- Boston[cv.ind.rand != j, 'nox']  # Training response
+    poly.fit <- lm(nox.train ~ poly(dis.train, i), data = Boston)
+ 
+    dis.test <- data.frame(Boston[cv.ind.rand == j, 'dis'])  # Test predictor
+    colnames(dis.test) <- 'dis' 
+    nox.test <- Boston[cv.ind.rand == j, 'nox']  # Test response
+    
+    cv.nox.pred <- predict(poly.fit, newdata = dis.test)  # Predict response
+
+    MSE.cv[j] <- sum((nox.test - cv.nox.pred)^2) / nrow(dis.test)  # Calculate MSE for that fold
+  }
+  cv.error[i] <- mean(MSE.cv)
+}
+
+# Return the lowest MSE:
+(min <- which.min(cv.error))
+cv.error
+
+```
+
+
+## d. Use the bs() function to fit a regression spline
+
+The following fits a regression spline to predict nox using dis. I chose to use 4 degrees of freedom (3 internal knots) because it seems natural to split the data into quarters. 
+
+```{r}
+spline.fit <- lm(nox ~ bs(dis, df = 4), data = Boston)
+spline.pred <- predict(spline.fit, newdata = Boston)
+
+ggplot(data = Boston) +
+  geom_point(aes(x = dis, y = nox)) +
+  geom_smooth(aes(x = dis, y = spline.pred, color = "Prediction"), se = F)
+
+```
+
+
+## e. Fit regression splines for a range of degrees of freedom
+
+Using degrees of freedom from 1 to 5 the model that had the lowest RSS at a value of 1.84 was the most flexible model with 5 degrees of freedom. 
+
+```{r}
+RSS.list <- c(rep(0,5))
+plot.list <- c()
+for(i in 1:5) {
+  spline.fit <- lm(nox ~ bs(dis, df = i))
+  spline.pred <- predict(spline.fit, newdata = Boston)
+  RSS <- sum((Boston$nox - spline.pred)^2)
+  RSS.list[i] <- RSS
+  
+  print(ggplot(data = Boston) +
+    geom_point(aes(x = dis, y = nox)) +
+    geom_smooth(aes(x = dis, y = spline.pred, color = "Prediction"), se = F))
+}
+
+RSS.list
+(min <- which.min(RSS.list))
+RSS.list[min]
+```
+
+## f - use cross validation to select optimal degrees freedom
+
+Using cross-validation to determine the optimal number of degrees of freedom results in 4 degrees of freedom which has an MSE of .0876.
+
+
+```{r}
+k <- 5  # Number of folds
+ncv <- ceiling(nrow(Boston)/k)  # Number observations per fold
+cv.ind = rep(1:k, ncv)  # Used to assign folds to observations
+cv.ind.rand = sample(cv.ind, nrow(Boston), replace = F)  # Randomize cv.ind
+
+# Vectors used to track error
+cv.error <- c()  # Avg MSE between folds for a given knot
+MSE.cv <- c()  # MSE for a given fold
+
+
+for(i in 1:5){  # For every knot in the list
+  for(j in 1:k){  # For each fold
+    dis.train <- Boston[cv.ind.rand != j, 'dis']  # Training predictor
+    nox.train <- Boston[cv.ind.rand != j, 'nox']  # Training response
+    model <- lm(nox.train ~ bs(dis.train, df = i), data=Boston)
+    
+    dis.test <- data.frame(Boston[cv.ind.rand == j, 'dis'])  # Test predictor
+    colnames(dis.test) <- 'dis' 
+    nox.test <- Boston[cv.ind.rand == j, 'nox']  # Test response
+    
+    cv.nox.pred <- predict(model, newdata=data.frame())  # Predict response
+    
+    MSE.cv[j] <- sum((nox.test - cv.nox.pred)^2) / nrow(dis.test)  # Calculate MSE for that fold
+  }
+  cv.error[i] <- mean(MSE.cv)
+}
+
+# Return the lowest MSE:
+(min <- which.min(cv.error))
+cv.error[min]
+cv.error
+```
+
+
+
+

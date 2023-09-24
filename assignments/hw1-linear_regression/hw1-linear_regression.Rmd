@@ -1,0 +1,266 @@
+---
+title: 'Stat 435: HW 1'
+author: "Pat McCornack"
+date: "2022-09-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1
+## 1a
+First we must load the _Auto_ dataset from the _ISLR_ library. 
+```{r}
+library(ISLR)
+data("Auto")
+```
+
+Then we create the linear regression and get summary statistics as well as plot the data in order to visualize it.
+```{r}
+lm.fit = lm(mpg ~ horsepower, data = Auto)
+summary(lm.fit)
+plot(Auto$horsepower, Auto$mpg, xlab = "Horsepower", ylab = "MPG")
+abline(lm.fit)
+```
+
+From the summary statistics we see:
+
+__Significance__: There is a statistically significant relationship between the predictor and the response value based on the p-value which is much less than 0.05. The interpretation of this is that there's a very small chance (<2e-16) that the given data was observed despite there being no association. 
+
+__Strength__: With a regression coefficient `B1 = -0.15` we see that this linear relationship is not very strong. However, by looking at the plot we can see that a linear model may not be the best fit for this data
+
+__Direction__: The relationship is negative. A car with more horsepower tends to have a lower mpg rating. 
+
+__Prediction__: Using the coefficients from the model, we can predict that a car with a horsepower of 98 will have mpg of 24.47. The as.numeric function was used to remove the 'horsepower' label from the output to avoid confusion. (Alternatively, I could have used `predict(lm.fit, data.frame(horsepower = 98))` for this prediction.)
+```{r}
+prediction = as.numeric((coef(lm.fit)[2] * 98 + coef(lm.fit)[1]))
+prediction
+```
+
+__Confidence Intervals__:
+The prediction interval associated with a horsepower of 98 is between 14.6708 - 34.12476. This means there is a 95% confidence that a new value of mpg associated with a horsepower of 98 would fall within this range (i.e. If we did an experiment where we tested the mpg of a car with 98 horsepower 100 times then 95 of those values would fall in this range.)
+```{r}
+predict(lm.fit, data.frame(horsepower = 98), interval ="prediction")
+```
+
+The confidence interval for the regression coefficient is that there is 95% confidence that it will be between -0.17 and -.14. 
+```{r}
+confint(lm.fit)
+```
+
+## 1b
+As before, the plot with the regression line is as follows:
+```{r}
+plot(Auto$horsepower, Auto$mpg, xlab = "Horsepower", ylab = "MPG")
+abline(lm.fit)
+```
+
+## 1c
+The following creates a plot of the fitted values against the residuals. We can clearly that there is a trend in the data using the "Residuals vs Fitted" plot and therefore __we can assume that the model is not valid__ because the underlying assumption of linearity was violated. If there was no trend then the residuals would be spread around 0. 
+
+
+```{r}
+plot(lm.fit)
+```
+
+
+# Question 2
+
+## 2a
+
+First we use the standard normal distribution to generate a vector x of 100 values centered around 0 with a standard deviation of 1. 
+```{r}
+set.seed(1)  # Ensure the same "random numbers" generated each time
+x = rnorm(100, 0, 1)
+```
+
+## 2b
+
+Then we use a normal distribution centered around 0 with a standard deviation of .25 to create a vector of 100 observations which will act as the noise term eps:
+```{r}
+eps = rnorm(100, 0, 0.25)
+```
+ 
+## 2c
+
+These object can then be used to generate a vector Y based on the model `Y = -1 + 0.5X + eps`. The code following then finds the length of the vector y (which is 100 based on the lengths of X and eps). 
+```{r}
+y = -1 + 0.5*x + eps
+length(y)
+```
+
+In this model $\beta_0=-1$ and $\beta_1=0.5$. 
+
+## 2d
+
+We can then use `lm()` to create a least squares model and fit it to a plot of the x, y values. We also use the known values of $\beta_0$ and $\beta_1$ to fit the population regression line. 
+```{r}
+y = -1 + 0.5*x + eps
+lm.sim_fit = lm(y ~ x)  # Least squares model
+plot(x, y)
+abline(lm.sim_fit, lwd = 2)  # Fit least squares model
+abline(-1, 0.5, lwd =1.5, lty = 2, col="Red")  # Fit the population regression line
+legend(x="bottomright", 
+       legend = c("Least Squares Model", "Population Regression Line"), 
+       fill = c("black", "red"))
+```
+
+
+## 2e
+
+In considering the RSS for the quadratic model vs the linear model we would expect them to be about the same. This is because the least squares model attempts to minimze the RSS. However, if we were to look a plot of the residuals vs. the fitted values there would be a clear trend in the quadratic model while there would be no trend in the linear model. 
+```{r}
+x2 = x^2
+quad_model <- lm(y ~ x + x2)
+summary(quad_model)
+summary(lm.sim_fit)
+```
+
+## 2f
+Using the F statistic we would expect both models to still yield significant results, but the statistic for the multiple linear regression would be around half. 
+
+## 2g
+
+When the noise in the model is decreased by decreasing the variance of the noise vector normal distribution, we see that the fit of both models goes up. In particular, the regression coefficient for x becomes even closer to be nearly the same value and the $R^2$ value for each becomes the same very high value. In this model over 99% of the variation in y can be explained by the variation in x, which makes sense given the variance of the noise vector was set to .01. 
+
+```{r}
+# Linear model
+x = rnorm(100, 0, 1)
+eps = rnorm(100, 0, 0.05)
+y = -1 + 0.5*x + eps
+lm.sim_fit = lm(y ~ x)  # Least squares model
+plot(x, y)
+abline(lm.sim_fit, lwd = 2)  # Fit least squares model
+abline(-1, 0.5, lwd =1.5, lty = 2, col="Red")  # Fit the population regression line
+legend(x="bottomright", 
+       legend = c("Least Squares Model", "Population Regression Line"), 
+       fill = c("black", "red"))
+
+# Quadratic Model
+x2 = x^2
+quad_model <- lm(y ~ x + x2)
+summary(quad_model)
+summary(lm.sim_fit)
+```
+
+
+# Question 3
+
+## 3a.
+
+Load the Boston data set. For this problem:
+Response: Per Capita Crime Rate (crim)
+Predictors: All other variables in data set
+```{r}
+library(MASS)
+data(Boston)
+```
+
+Fit a simple linear regression model for each predictor
+```{r}
+attach(Boston)  # Make the Boston dataset available to the following functions:
+
+zn_lm = lm(crim ~ zn)
+indus_lm = lm(crim ~ indus)
+chas_lm = lm(crim ~ chas)
+nox_lm = lm(crim ~ nox)
+rm_lm = lm(crim ~ rm)
+age_lm = lm(crim ~ age)
+dis_lm = lm(crim ~ dis)
+rad_lm = lm(crim ~ rad)
+tax_lm = lm(crim ~ tax)
+ptratio_lm = lm(crim ~ ptratio)
+black_lm = lm(crim ~ black)
+lstat_lm = lm(crim ~ lstat)
+medv_lm = lm(crim ~ medv)
+
+summary(zn_lm)
+summary(indus_lm)
+summary(chas_lm)
+summary(nox_lm)
+summary(rm_lm)
+summary(age_lm)
+summary(dis_lm)
+summary(rad_lm)
+summary(tax_lm)
+summary(ptratio_lm)
+summary(black_lm)
+summary(lstat_lm)
+summary(medv_lm)
+
+```
+
+
+With the exception of the chas (a dummy variable indicating whether a tract is on the Charles River), every model had a statistically significant relationship between predictor and response based on the p-value. The chas model had a p-value of .209, but this is unsurprising given that that dataset is categorical using a dummy variable. While the models were statistically significant they all had low $R^2$ values. The highest $R^2$ was .39 for the rad (index of accessibility to radial highways) data while most of the rest were closer to .15. The $R^2$ for rm (average number of rooms per dwelling) was .048. These $R^2$ values show that less than half (typically closer to 15%) of the variation could be explained by the predictors. 
+
+Based on a combination of p-values and $R^2$ values, we would expect rad, tax, and lstat to be good predictors. To evaluate this, we can make plots of the data long with residual plots for each predictor
+
+### rad
+
+Looking at the plot of crim vs. rad, we see that there is a cluster of values at a rad value of around 25 with much higher crime rates than the the rest of this data-set. This apparent trend that crime is higher in areas that are far from radial highways biases the model upwards. This becomes apparent in the residual plot where we see a downwards linear trend for the residuals outside of the clustered data. This model does not appear suitable for rad to be used as a predictor for crime. 
+
+```{r}
+plot(rad, crim, main = "Crime per Capita vs. Index of Accessibility to Radial Highways")
+abline(rad_lm)
+plot(rad_lm$fitted.values, rad_lm$residuals,
+     xlab = "Fitted Values\nlm(crim~rad)",
+     ylab = "Residuals", 
+     main ="Residuals vs Fitted")
+```
+
+### tax
+Similarly to rad, when we plot the tax data as a predictor for crime, we see a cluster of data around $670,000 that biases the model. In the residual plot there is a clear linear downward trend in the residuals around the data indicating this bias. This model does not appear suitable for tax to be used as a predictor for crim.
+
+```{r}
+plot(tax, crim, main = "Crime per Capita vs. Full Value Property Tax Rate per $10,000" )
+abline(tax_lm)
+plot(tax_lm$fitted.values, tax_lm$residuals, 
+     xlab = "Fitted Values\nlm(crim~tax)",
+     ylab = "Residuals", 
+     main ="Residuals vs Fitted")
+```
+
+### lstat
+
+Looking at the plot for the crim vs. lstat data, we see an apparent trend of crime increasing linearly as the lstat value increases. However, our linear model does not capture the cluster of values around crim = 0 for lower lstat values. There are also a number of outliers in the data. Looking at the residual plot we can see the bias introduced by not capturing the number of data points where crim = 0 as prominent linear downward trend. This model does not appear suitable for lstat to be used as a predictor for crim. 
+
+```{r}
+plot(lstat, crim, main = "Crime per Capita vs. Lower Status of Population (%)")
+abline(lstat_lm)
+plot(lstat_lm$fitted.values, lstat_lm$residuals, 
+     xlab = "Fitted Values\nlm(crim~lstat)", 
+     ylab = "Residuals", 
+     main ="Residuals vs Fitted")
+```
+
+## 3b.
+The following creates a multiple linear regression model using all of the predictors to predict crim. Looking at the $\beta$ values for each predictor, it appears that we can reject the null hypothesis for dis and rad based on the p-values. The medv may also be a statistically significant predictor. These assertions are not based on a p-value of .05, but are based on comparing the p-values among predictors. For instance the p-value fo zn is .017 which may normally be considered significant, but it is several orders of magnitude higher than the dis p-value and many orders of magnitude higher than the rad p-value. Most of the predictors are not statistically significant. 
+
+```{r}
+multiple_lm = lm(crim ~ zn + indus + chas + nox + rm + age + dis + rad + tax + ptratio + black + lstat + medv)
+summary(multiple_lm)
+
+```
+
+## 3c
+
+When the results of the regression coefficients from the univariate analysis are plotted against the results from the multiple linear regression the most immediate thing to notice is the discrepency in of the values for the nox predictors. At around -10 for the multivariate analysis and over 30 for the univariate analysis it's a clear indicator that the multiple linear regression treats predictors significantly differently. For both analyses the coefficients tend to cluster close to zero, but for the multivariate analysis the values tended to be negative while for the univariate analysis they were more evenly distributed between positive and negative values. 
+
+```{r}
+# Create a list of the univariate coefficients
+univariate_coef = c(coef(zn_lm)[2], coef(indus_lm)[2], coef(chas_lm)[2], coef(nox_lm)[2], 
+                    coef(rm_lm)[2], coef(age_lm)[2], coef(dis_lm)[2], coef(rad_lm)[2], 
+                    coef(tax_lm)[2], coef(ptratio_lm)[2], coef(black_lm)[2], 
+                    coef(lstat_lm)[2], coef(medv_lm)[2])
+
+# Plot the univariate coefficients against the multivariate coefficients
+plot(univariate_coef, coef(multiple_lm)[-1], 
+     xlab = "Univariate Coefficients", 
+     ylab = "Multivariate Coefficients")  # The [-1] specifies to ignore the intercept coefficient
+
+
+```
+
+

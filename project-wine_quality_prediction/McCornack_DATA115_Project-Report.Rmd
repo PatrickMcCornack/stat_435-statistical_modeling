@@ -1,0 +1,342 @@
+---
+title: "Predicting Wine Quality using Physicochemical Properties"
+author: "Pat McCornack"
+date: "2022-12-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Dataset 
+
+I chose the wine quality dataset from the UCI Machine Learning repository for this analysis (https://archive.ics.uci.edu/ml/datasets/Wine+Quality). The data had already been cleaned prior to being distributed and had no quality issues that required pre-processing. After some research it seems that while sulphates are not used in wine-making, sulphites are widely used so I assumed there was a typo and changed the column name. 
+
+```{r}
+library(ggplot2)
+library(dplyr)
+r.wine <- read.csv("./wine-data/winequality-red.csv", sep = ";") 
+colnames(r.wine)[10] = "sulphites"
+```
+
+
+# Big Question
+
+The question I was interested in answering using this data set was whether the physicochemical properties of a wine could be used to predict the quality. In order to answer this question I chose to initially work with the red wine data and implement a regression model to attempt to predict a wines quality. The type of regression model was determined after some initial exploratory data analysis.
+
+Before beginning to work with the data I did preliminary research on each of the parameters in order to get an idea of possible correlations between variables and which variables may be strong predictors. Based on this research I suspected that volatile acidity, alcohol content, and residual sugar content would have the biggest impact on quality. I also hypothesized that there would be a negative correlation between volatile acidity and citric acid as well as sulphites.
+
+My belief that volatile acidity would be a strong negative predictor was due to its association with acetic acid content. High acetic acid levels indicated the wine had undesirable micro-organisms growing in it during fermentation. These micro-organisms compete for sugar with the yeast and produce acetic acid. Acetic acid will make a wine taste and smell of vinegar and therefore lower its quality. 
+
+The idea that alcohol and residual sugar content may also be predictors mostly came from personal observations that cheap wines typically have lower alcohol content and higher sugar content. 
+
+```{r}
+names(r.wine)
+```
+
+# Exploratory Data Analsis
+
+Before attempting to create models, I wanted to understand the relationships within the data better. This was accomplished using data summaries and visualizations. 
+
+## Wine Quality Summary
+
+A high level overview of the data shows that we have 1,599 samples that are described using 12 parameters. Both volatile acidity and residual sugar content each have maximum values far beyond the central measures. These outliers will be further explored later on. Alcohol content seems to have a much more even spread. Most important is the observation that the dataset is very imbalanced with the vast majority of observations being rated either 5 or 6. We will keep this imbalance in mind throughout the analysis. 
+
+Note that while this summarization was performed with quality as a factor variable, the regression models were built by modeling quality as a continuous number.
+
+
+```{r}
+r.wine.qual <- r.wine
+r.wine.qual$quality <- as.factor(r.wine$quality)
+
+str(r.wine.qual)
+summary(r.wine.qual)
+```
+
+## Checking variance of parameters of interest
+
+As noted there are far more samples rated 5 and 6 than the higher and lower scores. 
+
+```{r}
+ggplot(data = r.wine) +
+  geom_bar(aes(x=quality), fill = "indianred2", color = "black") +
+  labs(title = "Variance in Quality of Red Wine",
+       x = "Quality",
+       y = "Count") +
+  theme_bw()
+```
+
+The histogram of volatile acidity shows that the values are fairly well distributed about the center, but there is a tail to the right. We also note the outlier we noticed earlier that has a value of around 1.6. The distribution of the quality does seem to be biased towards wines with lower levels of volatile acidity which supports our hypothesis
+
+```{r}
+ggplot(data = r.wine) +
+  geom_histogram(aes(x=volatile.acidity, fill = r.wine.qual$quality), color = "black", bins = 30) +
+  labs(title = "Variance in Volatile Acidity of Red Wine",
+       x = "Volatile Acidity",
+       y = "Count") +
+  theme_bw() +
+  scale_fill_brewer(palette="Reds") +
+  guides(fill=guide_legend("Quality"))
+  
+```
+
+The alcohol content of red wines in this dataset is skewed to the right with one notable outlier. Interestingly the distribution of the wines rated 7 or 8 do not match the overall distribution and occupy a disproportionate number of the wines with higher percentages. Similarly, the majority of the lower quality wine with ratings of 3 or 4 occupy the left side of the distribution. This suggests that alcohol may be used as a strong predictor of quality. 
+
+```{r}
+ggplot(data = r.wine) +
+  geom_histogram(aes(x=alcohol, fill = r.wine.qual$quality), color = "black", bins = 30) +
+  labs(title = "Variance in Alcohol Content of Red Wine",
+       x = "Alcohol %",
+       y = "Count") +
+  theme_bw() +
+  scale_fill_brewer(palette="Reds") +
+  guides(fill=guide_legend("Quality"))
+```
+
+The residual sugar content is also right-tailed, but only a small percentage of wines had residual sugar contents over 4 g/L. The distribution of each quality does seem to match the overall distribution, suggesting that the residual sugar content is not a strong predictor. However, this could also be due to the fact that the dataset is so imbalanced. 
+
+```{r}
+ggplot(data = r.wine) +
+  geom_histogram(aes(x=residual.sugar, fill = r.wine.qual$quality), color = "black") +
+  labs(title = "Variance in Residual Sugar Content of Red Wine",
+       x = "Residual Sugar (g/L)",
+       y = "Count") +
+  theme_bw() +
+  scale_fill_brewer(palette="Reds") +
+  guides(fill=guide_legend("Quality"))
+```
+
+## Checking for covariance within the dataset
+
+For a quick overview of linear correlation among variables, we create a correlation matrix. As suspected, alcohol and volatile acidity are relatively highly correlated with quality. This also confirms that residual sugar is not highly correlated with quality, as was suggested by the histogram. Some other parameters that this suggests may be of interest are citric acid and sulphites. Both of these are used to control the chemical environment of the wine and reduce the growth of undesirable micro-organisms, so I suspected that there was collinearity between volatile acidity and citric acid as well as with sulphite content. This was checked visually using scatterplots to find any potential relationships. 
+
+```{r}
+cor(r.wine)
+```
+
+Using a scatterplot to examine the relationship between citric acid and volatile acidity reveals a strong negative linear trend between them. This is unsurprising given the function of citric acid in wine-making. 
+
+```{r}
+ggplot(data = r.wine.qual) +
+  geom_point(aes(x = citric.acid, y = volatile.acidity), color = "Red") +
+  labs(title = "Relationship between Citric Acid Content and Volatile Acidity",
+       x = "Citric Acid Content",
+       y = "Volatile Acidity") +
+  theme_bw() 
+```
+
+The method reveals what may be a slight negative trend between sulphite content and volatile acidity. However, the trend may not be linear and the points towards the right of the graph caused me to investigate the relationship between sulphite content and quality further using a histogram. 
+
+```{r}
+ggplot(data = r.wine.qual) +
+  geom_point(aes(x = sulphites, y = volatile.acidity), color = "Red") +
+  labs(title = "Relationship between Sulphite Content and Volatile Acidity",
+       x = "Sulphite Content",
+       y = "Volatile Acidity") +
+  theme_bw() 
+```
+
+Lastly, since at this point it appears that alcohol content and volatile acidity are the strongest predictors we want to check whether there is colinearity between them. The chart shows there may be a slight downward trend, but this is more likely due to the high concentration of observations with alcohol contents of 9-10%. Overall there doesn't seem to be colinearity between the alcohol content and volatile acidity. 
+
+```{r}
+ggplot(data = r.wine.qual) +
+  geom_jitter(aes(x = alcohol, y = volatile.acidity), color = "Red") +
+  labs(title = "Relationship between Alcohol Content and Volatile Acidity",
+       x = "Alcohol Content",
+       y = "Volatile Acidity") +
+  theme_bw() 
+```
+
+### __Further Investigation of Sulphite Content__
+
+The distribution of the higher quality wines does fully match the overall distribution of sulphites vs. wine. This suggests there may be some predictive power in using sulphites to predict quality, but this could be due to the colinearity between sulphite content and volatile acidity shown above. Investigating the outlying observations where the sulphite content was greater than 1 does not yield any interesting conclusions. 
+
+```{r}
+ggplot(data = r.wine) +
+  geom_histogram(aes(x=sulphites, fill = r.wine.qual$quality), color = "black") +
+  labs(title = "Variance in Sulphite Content of Red Wine",
+       x = "Sulphite Content",
+       y = "Count") +
+  theme_bw() +
+  scale_fill_brewer(palette="Reds") +
+  guides(fill=guide_legend("Quality"))
+
+high.sulphite <- r.wine.qual[r.wine.qual$sulphites >= 1, ]
+high.sulphite$quality <- as.factor(high.sulphite$quality)
+dim(high.sulphite)
+
+ggplot(data = high.sulphite) +
+  geom_histogram(aes(x=sulphites, fill = quality), color = "black") +
+  labs(title = "Variance in Sulphite Content of Red Wine",
+       subtitle = "Wines with sulphite content greater than 1",
+       x = "Sulphite Content",
+       y = "Count") +
+  theme_bw() +
+  scale_fill_brewer(palette="Reds") +
+  guides(fill=guide_legend("Quality"))
+```
+
+# Modeling Wine Quality
+
+At this point I suspect that alcohol content and volatile acidity will be the strongest predictors of wine quality. To investigate their predictive power, I created a simple linear regression model for each predictor and evaluated them using cross-validation. I then created a multiple linear regression model using both predictors and evaluated its performance using cross-validation and compared the results against those of a model using every parameter in the dataset as a predictor. While linear regression was used, the prediction for each observation was rounded to the nearest whole number for comparison. 
+
+## Simple Linear Regression
+
+Cross validation was performed using 5 folds and models were evaluated using accuracy and compared using mean-squared error (MSE).
+
+__Cross-validate the models:__ 
+```{r}
+set.seed(1234)  # For reproducibility
+
+k <- 5
+ncv <- ceiling(nrow(r.wine)/k)
+cv.ind <- rep(1:k, ncv)
+cv.ind.rand <- sample(cv.ind, nrow(r.wine))
+
+MSE.cv.alc <- c()
+MSE.cv.vol <- c()
+
+for(j in 1:k){
+  train <- r.wine[cv.ind.rand != j, ]  # Training predictor
+  model.alc <- lm(quality ~ alcohol, train)
+  model.vol <- lm(quality ~ volatile.acidity, train)
+  
+  test <- r.wine[cv.ind.rand == j, ]  # Test predictor
+  
+  cv.pred.alc <- predict(model.alc, newdata = test)
+  cv.pred.alc <- round(cv.pred.alc, 0)
+  
+  cv.pred.vol <- predict(model.vol, newdata = test)
+  cv.pred.vol <- round(cv.pred.vol, 0)
+  
+  MSE.cv.alc[j] <- sum((test$quality - cv.pred.alc)^2) / nrow(test)
+  MSE.cv.vol[j] <- sum((test$quality - cv.pred.vol)^2) / nrow(test)
+}
+
+```
+
+__Analyze the Results:__ 
+
+Using a confusion matrix for each model, we find that the model that just used alcohol to predict quality was correct 57% of the time while the model that just used volatile acidity was correct 52% of the time. The MSE of the alcohol model was also lower than that of the volatile acidity model. While the alcohol model did perform marginally better, neither performed exceptionally well. This was likely due to bias introduced by most of the samples being rated either a 5 or 6. The visualizations reveal that for the most part, the model just guessed that each sample was either 5 or 6. 
+```{r}
+mean(MSE.cv.alc)
+mean(MSE.cv.vol)
+
+table(cv.pred.alc, test$quality)
+table(cv.pred.vol, test$quality)
+
+correct.alc = (98 + 83 + 2) / nrow(test)
+correct.vol = (64 + 102) / nrow(test)
+
+correct.alc
+correct.vol
+
+# Make quality a factor to analyze the results:
+test$quality <- as.factor(test$quality)
+cv.pred.alc <- as.factor(cv.pred.alc)
+cv.pred.vol <- as.factor(cv.pred.vol)
+
+ggplot(data = test) +
+  geom_bar(aes(x = quality), color = "Black", fill = "#ef8a62", alpha = 0.5) +
+  geom_bar(aes(x = cv.pred.alc), color = "Black", fill = "#67a9cf", alpha = 0.5) +
+  labs(title = "Prediction Accuracy using Alcohol Content",
+       x = "Quality",
+       y = "Count")
+
+ggplot(data = test) +
+  geom_bar(aes(x = quality), color = "Black", fill = "#ef8a62", alpha = 0.5) +
+  geom_bar(aes(x = cv.pred.vol), color = "Black", fill = "#67a9cf", alpha = 0.5) +
+  labs(title = "Prediction Accuracy using Volatile Acidity",
+       x = "Quality",
+       y = "Count")
+
+```
+
+## Multiple Linear Regression 
+
+Once again 5-fold cross validation was used to evaluate each model. One model was created using just volatile acidity and alcohol, while the other used every parameter in the dataset as a predictor. Models were evaluated by their accuracy and compared using mean-squared-error (MSE).
+
+__Cross-Validate the Models:__
+```{r}
+
+k <- 5
+ncv <- ceiling(nrow(r.wine)/k)
+cv.ind <- rep(1:k, ncv)
+cv.ind.rand <- sample(cv.ind, nrow(r.wine))
+
+MSE.cv.1 <- c()
+MSE.cv.2 <- c()
+
+for(j in 1:k){
+  train <- r.wine[cv.ind.rand != j, ]  # Training predictor
+  model.1 <- lm(quality ~ volatile.acidity + alcohol, train)
+  model.2 <- lm(quality ~ ., train)
+  
+  test <- r.wine[cv.ind.rand == j, ]  # Test predictor
+  
+  cv.pred.1 <- predict(model.1, newdata = test)
+  cv.pred.1 <- round(cv.pred.1, 0)
+  
+  cv.pred.2 <- predict(model.2, newdata = test)
+  cv.pred.2 <- round(cv.pred.2, 0)
+  
+  MSE.cv.1[j] <- sum((test$quality - cv.pred.1)^2) / nrow(test)
+  MSE.cv.2[j] <- sum((test$quality - cv.pred.2)^2) / nrow(test)
+ 
+}
+
+```
+
+
+__Analyze the Results:__
+
+The model using alcohol content and volatile acidity to predict quality was correct 59% of the time and had a slightly higher MSE than the model using all predictors which was correct 60% of the time. Based on the p-value of the second model, many of the predictors were not statistically significant. 
+
+While the model using all the predictors was slightly more accurate, the added complexity from using all predictors vs. using just two makes the model using just alcohol and volatile acidity better. Within this model, the weight of volatile acidity is higher than the weight of alcohol which means that it was a stronger predictor. 
+```{r}
+
+mean(MSE.cv.1)
+mean(MSE.cv.2)
+
+table(cv.pred.1, test$quality)
+table(cv.pred.2, test$quality)
+
+correct.1 = (94 + 86 + 7) / nrow(test)
+correct.2 = (96 + 86 + 10) / nrow(test)
+
+correct.1
+correct.2
+
+test$quality <- as.factor(test$quality)
+cv.pred.1 <- as.factor(cv.pred.1)
+cv.pred.2 <- as.factor(cv.pred.2)
+
+ggplot(data = test) +
+  geom_bar(aes(x = quality), color = "Black", fill = "#ef8a62", alpha = 0.5) +
+  geom_bar(aes(x = cv.pred.1), color = "Black", fill = "#67a9cf", alpha = 0.5) +
+  labs(title = "Prediction Accuracy using Alcohol Content and Volatile Acidity",
+       x = "Quality",
+       y = "Count")
+
+ggplot(data = test) +
+  geom_bar(aes(x = quality), color = "Black", fill = "#ef8a62", alpha = 0.5) +
+  geom_bar(aes(x = cv.pred.2), color = "Black", fill = "#67a9cf", alpha = 0.5) +
+  labs(title = "Prediction Accuracy using all Predictors",
+       x = "Quality",
+       y = "Count")
+
+summary(model.1)
+summary(model.2)
+
+```
+
+# Conclusion
+
+While I was able to predict the quality of the wine 59% of the time using multiple linear regression with alcohol content and volatile acidity as the predictors, it is likely that the model is biased. The original dataset is heavily imbalanced with wines rated 5 or 6 making up the majority of the population. The model is likely overfit on this data and would almost always predict that the wine was rated 5 or 6 given any dataset. In retrospect, I should have over-sampled the data for ratings 3,4,7, and 8 in order to balanced the dataset before running the analysis. While 59% is a non-trivial accuracy rate for a problem with 6 classifications, the results of my analysis were inconclusive. 
+
+However, I did find that there likely is an association between quality and volatile acidity as well as with alcohol content. An analysis would need to be performed on a balanced dataset to confirm this however. 
+
+In addition to perform this analysis with a balanced dataset, I would also like to look at the differences between white wine and red wine and determine if they have similar predictors with similar weights for quality prediction. It may also be interesting to perform k-means clustering and see whether red wine and white wine could be separated into clusters. 
+
+Overall the most important thing I learned from this analysis is the importance of using balanced data in statistical modeling. 
